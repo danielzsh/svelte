@@ -284,21 +284,6 @@ export const javascript_visitors_runes = {
 				} else {
 					const bindings = state.scope.get_bindings(declarator);
 					const id = state.scope.generate('derived_value');
-					declarations.push(
-						b.declarator(
-							b.id(id),
-							b.call(
-								'$.derived',
-								b.thunk(
-									b.block([
-										b.let(declarator.id, value),
-										b.return(b.array(bindings.map((binding) => binding.node)))
-									])
-								)
-							)
-						)
-					);
-
 					const body = [];
 					const decorator_id = declarator.id;
 
