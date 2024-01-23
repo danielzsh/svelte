@@ -974,13 +974,20 @@ export function get(signal) {
 
 	// Register the dependency on the current consumer signal.
 	if (current_consumer !== null && (current_consumer.f & MANAGED) === 0 && !current_untracking) {
-		// If the last dependency matchs our current_derived_object, then remove it from the
-		// tracked dependency list for this signal.
+		// Check if the current_derived_object matches our last derived dependency (or its last dependency).
+		// If so, then remove the current_derived_object from the current tracked dependencies.
 		if (current_derived_object !== null && current_dependencies !== null) {
 			const last_dependency = current_dependencies[current_dependencies.length - 1];
-			const can_remove_last_dependency = last_dependency.v === current_derived_object.v;
-			if (can_remove_last_dependency) {
-				current_dependencies.pop();
+			if ((last_dependency.f & DERIVED) !== 0) {
+				const last_derived = /** @type {import('./types.js').ComputationSignal} */ (
+					last_dependency
+				);
+				const current_value = current_derived_object.v;
+				const can_remove_last_dependency =
+					current_value === last_derived.v || current_value === last_derived.d?.at(-1)?.v;
+				if (can_remove_last_dependency) {
+					current_dependencies.pop();
+				}
 			}
 		}
 
