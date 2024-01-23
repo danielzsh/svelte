@@ -57,7 +57,7 @@ export function is_event_attribute(attribute) {
 
 /**
  * Extracts all identifiers from a pattern.
- * @param {import('estree').Pattern} param
+ * @param {import('estree').Expression | import('estree').Pattern} param
  * @param {Array<import('estree').ObjectPattern | import('estree').ArrayPattern | import('estree').Property | import('estree').RestElement>} [path]
  * @param {import('estree').Identifier[]} [nodes]
  * @returns {import('estree').Identifier[]}
@@ -112,9 +112,13 @@ export function extract_identifiers(param, path = [], nodes = []) {
 			extract_identifiers(param.argument, path, nodes);
 			break;
 
-		case 'AssignmentPattern':
+		case 'AssignmentPattern': {
+			// Extract the right-side but do not assign to node, as they're not declarations
+			// TODO: handle other expression types other than Identifier
+			extract_identifiers(param.right, path, []);
 			extract_identifiers(param.left, path, nodes);
 			break;
+		}
 	}
 
 	return nodes;
