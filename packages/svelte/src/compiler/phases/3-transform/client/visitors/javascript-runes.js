@@ -4,6 +4,7 @@ import * as b from '../../../../utils/builders.js';
 import * as assert from '../../../../utils/assert.js';
 import {
 	get_prop_source,
+	has_derived_properties,
 	is_derived_object_property,
 	is_state_source,
 	should_proxy_or_freeze
@@ -338,18 +339,21 @@ export const javascript_visitors_runes = {
 								)
 							)
 						);
+						for (let i = 0; i < bindings.length; i++) {
+							bindings[i].expression = b.call(
+								b.member(b.call('$.get', b.id(id)), b.literal(i), true)
+							);
+						}
 					} else {
 						body.push(
 							b.var(decorator_id, value),
 							b.return(b.array(bindings.map((binding) => binding.node)))
 						);
+						for (let i = 0; i < bindings.length; i++) {
+							bindings[i].expression = b.member(b.call('$.get', b.id(id)), b.literal(i), true);
+						}
 					}
 					declarations.push(b.declarator(b.id(id), b.call('$.derived', b.thunk(b.block(body)))));
-					for (let i = 0; i < bindings.length; i++) {
-						bindings[i].expression = b.call(
-							b.member(b.call('$.get', b.id(id)), b.literal(i), true)
-						);
-					}
 				}
 				continue;
 			}
@@ -420,10 +424,8 @@ export const javascript_visitors_runes = {
 	},
 	ObjectExpression(node, context) {
 		const scope = context.state.scope;
-		const has_derived_properties = node.properties.some((property) =>
-			is_derived_object_property(property, scope)
-		);
-		if (has_derived_properties) {
+
+		if (has_derived_properties(node, scope)) {
 			/** @type {string[]} **/
 			const to_reference = [];
 			/** @type {Array<import('estree').Property | import('estree').SpreadElement>} **/

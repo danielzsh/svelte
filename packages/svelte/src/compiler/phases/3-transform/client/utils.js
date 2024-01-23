@@ -652,3 +652,11 @@ export function is_derived_object_property(property, scope) {
 		get_rune(property.value, scope) === '$derived'
 	);
 }
+
+/**
+ * @param {import("estree").ObjectExpression} node
+ * @param {import("../../scope.js").Scope} scope
+ */
+export function has_derived_properties(node, scope) {
+	return node.properties.some((property) => is_derived_object_property(property, scope));
+}
