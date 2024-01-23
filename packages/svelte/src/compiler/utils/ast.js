@@ -58,21 +58,44 @@ export function is_event_attribute(attribute) {
 /**
  * Extracts all identifiers from a pattern.
  * @param {import('estree').Pattern} param
+ * @param {Array<import('estree').ObjectPattern | import('estree').ArrayPattern | import('estree').Property | import('estree').RestElement>} [path]
  * @param {import('estree').Identifier[]} [nodes]
  * @returns {import('estree').Identifier[]}
  */
-export function extract_identifiers(param, nodes = []) {
+export function extract_identifiers(param, path = [], nodes = []) {
 	switch (param.type) {
 		case 'Identifier':
+			if (path.length > 1) {
+				const pattern =
+					/** @type {import('estree').ObjectPattern | import('estree').ArrayPattern} */ (path[0]);
+				// We only handle associating identifiers with the properties for objects right now.
+				if (pattern.type === 'ObjectPattern') {
+					const property = /** @type {import('estree').Property | import('estree').RestElement} */ (
+						path[1]
+					);
+					let metadata = pattern.metadata;
+					if (metadata == null) {
+						pattern.metadata = metadata = {
+							identifiers: new Map()
+						};
+					}
+					let properties = metadata.identifiers.get(param.name);
+					if (properties === undefined) {
+						properties = [];
+						metadata.identifiers.set(param.name, properties);
+					}
+					properties.push(property);
+				}
+			}
 			nodes.push(param);
 			break;
 
 		case 'ObjectPattern':
 			for (const prop of param.properties) {
 				if (prop.type === 'RestElement') {
-					extract_identifiers(prop.argument, nodes);
+					extract_identifiers(prop.argument, [...path, param, prop], nodes);
 				} else {
-					extract_identifiers(prop.value, nodes);
+					extract_identifiers(prop.value, [...path, param, prop], nodes);
 				}
 			}
 
@@ -80,17 +103,17 @@ export function extract_identifiers(param, nodes = []) {
 
 		case 'ArrayPattern':
 			for (const element of param.elements) {
-				if (element) extract_identifiers(element, nodes);
+				if (element) extract_identifiers(element, [...path, param], nodes);
 			}
 
 			break;
 
 		case 'RestElement':
-			extract_identifiers(param.argument, nodes);
+			extract_identifiers(param.argument, path, nodes);
 			break;
 
 		case 'AssignmentPattern':
-			extract_identifiers(param.left, nodes);
+			extract_identifiers(param.left, path, nodes);
 			break;
 	}
 

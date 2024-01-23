@@ -298,8 +298,72 @@ export const javascript_visitors_runes = {
 							)
 						)
 					);
+
+					const body = [];
+					const decorator_id = declarator.id;
+
+					if (decorator_id.type === 'ObjectPattern' && decorator_id.metadata != null) {
+						const identifiers = decorator_id.metadata.identifiers;
+						body.push(
+							b.var('$object', value),
+							b.return(
+								b.array(
+									bindings.map((binding) => {
+										const binding_body = [];
+										const node = binding.node;
+										const properties = identifiers.get(node.name) || decorator_id.properties;
+										const matching = decorator_id.properties.filter(
+											(p) => properties === undefined || properties.includes(p)
+										);
+										const matching_rest = matching.find((p) => p.type === 'RestElement');
+										if (matching.length - (matching_rest ? 1 : 0) > 0) {
+											binding_body.push(
+												b.var(
+													{
+														...decorator_id,
+														properties: matching
+													},
+													b.id('$object')
+												),
+												b.return(node)
+											);
+										}
+										if (matching_rest) {
+											const not_matching = /** @type {import('estree').Property[]} */ (
+												decorator_id.properties.filter((p) => !matching.includes(p))
+											);
+											binding_body.push(
+												b.return(
+													b.call(
+														'$.rest_object',
+														b.id('$object'),
+														b.array(
+															not_matching.map((p) =>
+																p.key.type === 'Identifier' || p.key.type === 'PrivateIdentifier'
+																	? b.literal(p.key.name)
+																	: p.key
+															)
+														)
+													)
+												)
+											);
+										}
+										return b.thunk(b.block(binding_body));
+									})
+								)
+							)
+						);
+					} else {
+						body.push(
+							b.var(decorator_id, value),
+							b.return(b.array(bindings.map((binding) => binding.node)))
+						);
+					}
+					declarations.push(b.declarator(b.id(id), b.call('$.derived', b.thunk(b.block(body)))));
 					for (let i = 0; i < bindings.length; i++) {
-						bindings[i].expression = b.member(b.call('$.get', b.id(id)), b.literal(i), true);
+						bindings[i].expression = b.call(
+							b.member(b.call('$.get', b.id(id)), b.literal(i), true)
+						);
 					}
 				}
 				continue;
