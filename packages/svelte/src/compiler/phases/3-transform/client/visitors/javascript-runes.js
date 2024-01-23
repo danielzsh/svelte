@@ -2,7 +2,12 @@ import { get_rune } from '../../../scope.js';
 import { is_hoistable_function, transform_inspect_rune } from '../../utils.js';
 import * as b from '../../../../utils/builders.js';
 import * as assert from '../../../../utils/assert.js';
-import { get_prop_source, is_state_source, should_proxy_or_freeze } from '../utils.js';
+import {
+	get_prop_source,
+	is_derived_object_property,
+	is_state_source,
+	should_proxy_or_freeze
+} from '../utils.js';
 import { extract_paths, unwrap_ts_expression } from '../../../../utils/ast.js';
 
 /** @type {import('../types.js').ComponentVisitors} */
@@ -360,6 +365,104 @@ export const javascript_visitors_runes = {
 
 		if (rune === '$inspect' || rune === '$inspect().with') {
 			return transform_inspect_rune(node, context);
+		}
+
+		context.next();
+	},
+	ObjectExpression(node, context) {
+		const scope = context.state.scope;
+		const has_derived_properties = node.properties.some((property) =>
+			is_derived_object_property(property, scope)
+		);
+		if (has_derived_properties) {
+			/** @type {string[]} **/
+			const to_reference = [];
+			/** @type {Array<import('estree').Property | import('estree').SpreadElement>} **/
+			const properties = [];
+			const deriveds = [];
+
+			const might_be_in_derived_scope = context.path.some((p) => {
+				if (
+					p.type === 'VariableDeclaration' &&
+					p.declarations.length === 1 &&
+					p.declarations[0].init?.type === 'CallExpression' &&
+					get_rune(p.declarations[0].init, scope) === '$derived'
+				) {
+					return true;
+				}
+				if (
+					p.type === 'FunctionDeclaration' ||
+					p.type === 'ArrowFunctionExpression' ||
+					p.type === 'FunctionExpression'
+				) {
+					return true;
+				}
+				return false;
+			});
+
+			for (const property of node.properties) {
+				if (property.type === 'Property' && is_derived_object_property(property, scope)) {
+					const value = /** @type {import('estree').CallExpression} **/ (property.value)
+						.arguments[0];
+					let needs_wrapping_in_derived = true;
+					let derived_name = '';
+
+					if (value.type === 'Identifier') {
+						derived_name = value.name;
+						const binding = scope.get(derived_name);
+						if (binding !== null && (binding.kind === 'state' || binding.kind === 'derived')) {
+							needs_wrapping_in_derived = false;
+						}
+					}
+
+					if (needs_wrapping_in_derived) {
+						derived_name = scope.generate('derived_property');
+						const derived_expression = /** @type {import('estree').Expression} **/ (
+							context.visit(value)
+						);
+						deriveds.push(b.var(derived_name, b.call('$.derived', b.thunk(derived_expression))));
+					}
+
+					if (!to_reference.includes(derived_name)) {
+						to_reference.push(derived_name);
+					}
+
+					properties.push({
+						...property,
+						kind: 'get',
+						value: b.function(
+							null,
+							[],
+							b.block([
+								b.return(
+									might_be_in_derived_scope
+										? b.call('$.get_derived', b.id('$$consumer'), b.id(derived_name))
+										: b.call('$.get', b.id(derived_name))
+								)
+							])
+						)
+					});
+				} else {
+					properties.push(
+						/** @type {import('estree').Property | import('estree').SpreadElement} **/ (
+							context.visit(property)
+						)
+					);
+				}
+			}
+
+			const body = [];
+			if (deriveds.length > 0) {
+				body.push(...deriveds);
+			}
+			if (might_be_in_derived_scope) {
+				body.push(b.var('$$consumer', b.id('$.current_consumer')));
+				if (to_reference.length > 0) {
+					body.push(b.stmt(b.sequence(to_reference.map((r) => b.call('$.get', b.id(r))))));
+				}
+			}
+			body.push(b.return(b.object(properties)));
+			return b.call(b.thunk(b.block(body)));
 		}
 
 		context.next();
