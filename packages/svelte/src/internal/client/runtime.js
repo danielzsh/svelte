@@ -1342,8 +1342,8 @@ export function derived(init) {
 	signal.i = init;
 	signal.x = current_component_context;
 	signal.e = default_equals;
-	if (!is_unowned) {
-		push_reference(/** @type {import('./types.js').EffectSignal} */ (current_effect), signal);
+	if (current_consumer !== null) {
+		push_reference(current_consumer, signal);
 	}
 	return signal;
 }

@@ -487,7 +487,7 @@ export const javascript_visitors_runes = {
 							b.block([
 								b.return(
 									might_be_in_derived_scope
-										? b.call('$.get_derived', b.id('$$consumer'), b.id(derived_name))
+										? b.call('$.get_derived', b.id('$consumer'), b.id(derived_name))
 										: b.call('$.get', b.id(derived_name))
 								)
 							])
@@ -507,7 +507,7 @@ export const javascript_visitors_runes = {
 				body.push(...deriveds);
 			}
 			if (might_be_in_derived_scope) {
-				body.push(b.var('$$consumer', b.id('$.current_consumer')));
+				body.push(b.var('$consumer', b.id('$.current_consumer')));
 				if (to_reference.length > 0) {
 					body.push(b.stmt(b.sequence(to_reference.map((r) => b.call('$.get', b.id(r))))));
 				}
