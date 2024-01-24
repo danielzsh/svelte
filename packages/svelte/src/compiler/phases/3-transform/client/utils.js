@@ -294,7 +294,7 @@ export function serialize_set_binding(node, context, fallback, options) {
 					if (
 						context.state.analysis.runes &&
 						!options?.skip_proxy_and_freeze &&
-						should_proxy_or_freeze(value)
+						should_proxy_or_freeze(value, context.state.scope)
 					) {
 						const assignment = fallback();
 						if (assignment.type === 'AssignmentExpression') {
@@ -311,7 +311,7 @@ export function serialize_set_binding(node, context, fallback, options) {
 						left,
 						context.state.analysis.runes &&
 							!options?.skip_proxy_and_freeze &&
-							should_proxy_or_freeze(value)
+							should_proxy_or_freeze(value, context.state.scope)
 							? private_state.kind === 'frozen_state'
 								? b.call('$.freeze', value)
 								: b.call('$.proxy', value)
@@ -331,7 +331,7 @@ export function serialize_set_binding(node, context, fallback, options) {
 				context.state.analysis.runes &&
 				public_state !== undefined &&
 				!options?.skip_proxy_and_freeze &&
-				should_proxy_or_freeze(value)
+				should_proxy_or_freeze(value, context.state.scope)
 			) {
 				const assignment = fallback();
 				if (assignment.type === 'AssignmentExpression') {
@@ -399,7 +399,7 @@ export function serialize_set_binding(node, context, fallback, options) {
 					b.id(left_name),
 					context.state.analysis.runes &&
 						!options?.skip_proxy_and_freeze &&
-						should_proxy_or_freeze(value)
+						should_proxy_or_freeze(value, context.state.scope)
 						? b.call('$.proxy', value)
 						: value
 				);
@@ -409,7 +409,7 @@ export function serialize_set_binding(node, context, fallback, options) {
 					b.id(left_name),
 					context.state.analysis.runes &&
 						!options?.skip_proxy_and_freeze &&
-						should_proxy_or_freeze(value)
+						should_proxy_or_freeze(value, context.state.scope)
 						? b.call('$.freeze', value)
 						: value
 				);
@@ -624,8 +624,11 @@ export function get_prop_source(binding, state, name, initial) {
 	return b.call('$.prop', ...args);
 }
 
-/** @param {import('estree').Expression} node */
-export function should_proxy_or_freeze(node) {
+/**
+ * @param {import('estree').Expression} node
+ * @param {import("../../scope.js").Scope | null} scope
+ */
+export function should_proxy_or_freeze(node, scope) {
 	if (
 		!node ||
 		node.type === 'Literal' ||
@@ -637,6 +640,21 @@ export function should_proxy_or_freeze(node) {
 		(node.type === 'Identifier' && node.name === 'undefined')
 	) {
 		return false;
+	}
+	if (node.type === 'Identifier' && scope !== null) {
+		const binding = scope.get(node.name);
+		// Let's see if the reference is something that can be proxied or frozen
+		if (
+			binding !== null &&
+			!binding.reassigned &&
+			binding.initial !== null &&
+			binding.initial.type !== 'FunctionDeclaration' &&
+			binding.initial.type !== 'ClassDeclaration' &&
+			binding.initial.type !== 'ImportDeclaration' &&
+			binding.initial.type !== 'EachBlock'
+		) {
+			return should_proxy_or_freeze(binding.initial, null);
+		}
 	}
 	return true;
 }
